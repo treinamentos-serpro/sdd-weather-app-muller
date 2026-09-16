@@ -66,7 +66,8 @@ demonstrada antes de iniciar a seguinte.
 
 1. **Busca de cidades visivel:** concluir T-01, T-05, T-07, T-08, T-10, T-12,
    T-15 e T-16, com T-23, T-25, T-26 e T-31. O resultado e uma busca acessivel, com
-   loading, vazio, erro e selecao de cidade; os componentes podem ser
+   loading, vazio, erro, lista de desambiguacao limitada a 10 opcoes e selecao
+   explicita de cidade; os componentes podem ser
    demonstrados isoladamente enquanto a tela completa ainda e composta.
 2. **Clima atual navegavel:** adicionar T-02, T-03, T-06, T-09, T-11, T-13,
    T-17 e T-19, com T-22, T-24, T-27 e T-29. A selecao passa a mostrar imediatamente
@@ -141,7 +142,7 @@ demonstrada antes de iniciar a seguinte.
   - somente itens com `id`, `name` e coordenadas numericas sao aceitos;
   - `admin1` e depois `admin2` sao usados como contexto geografico quando disponiveis;
   - duplicatas sao removidas por `id` e, como fallback, por coordenadas com precisao de 6 casas decimais;
-  - o retorno e limitado a 5 cidades e lista vazia e tratada como resultado vazio;
+  - o retorno e limitado a 10 cidades, preservando a ordem relevante do provedor, e lista vazia e tratada como resultado vazio;
   - a funcao rejeita payloads invalidos sem quebrar a busca.
 - **Dependencias:** T-01
 - **Arquivos provaveis:** `src/lib/geocoding.ts`
@@ -178,7 +179,7 @@ demonstrada antes de iniciar a seguinte.
 - **Descricao:** Consultar o endpoint de geocodificacao com termo normalizado e entregar cidades de dominio.
 - **Rastreabilidade:** RF01; AC01, AC06.
 - **Criterios de aceite:**
-  - a URL envia `count=5`, `language=pt` e `format=json`;
+  - a URL envia `count=10`, `language=pt` e `format=json`;
   - o termo e normalizado antes da chamada e a resposta vazia e tratada como vazio e nao como erro;
   - a validacao e deduplicacao sao delegadas para `geocoding.ts`;
   - os erros de transporte sao repassados com tipos e sem quebra da UI.
@@ -231,6 +232,7 @@ demonstrada antes de iniciar a seguinte.
   - termos com menos de 2 caracteres ficam em estado `idle` e nao disparam request;
   - o submit cancela o debounce em andamento e a busca nao dispara duas vezes para o mesmo termo;
   - transicoes cobrem `idle`, `loading`, `success`, `empty` e `error`;
+  - resultados validos permanecem em `searchResults` ate `selectCity` e nao iniciam forecast automaticamente;
   - retry usa o ultimo termo valido e reexecuta a busca atual.
 - **Dependencias:** T-08, T-10
 - **Arquivos provaveis:** `src/hooks/useWeatherApp.ts`
@@ -240,7 +242,8 @@ demonstrada antes de iniciar a seguinte.
 - **Descricao:** Adicionar selecao de cidade, consulta meteorologica, unidade ativa, refresh e retry no `useWeatherApp`.
 - **Rastreabilidade:** RF02, RF03, RF04, RF05; AC02, AC03, AC04, AC05.
 - **Criterios de aceite:**
-  - a cidade selecionada e armazenada imediatamente e dispara consulta meteorologica;
+  - `selectCity` armazena a cidade selecionada e dispara consulta meteorologica somente apos a acao explicita do usuario;
+  - a busca nunca escolhe automaticamente o primeiro resultado, inclusive quando retorna uma unica cidade;
   - a unidade inicial e Celsius e `setUnit` nao dispara rede nem altera snapshot de dados;
   - o hook preserva a cidade ao alternar unidade e ao consultar outra cidade na mesma sessao;
   - refresh e retry usam a cidade atual e mantem o estado de carregamento visivel.
@@ -275,12 +278,14 @@ demonstrada antes de iniciar a seguinte.
 
 ### T-16 — Exibir resultados e selecao de cidade
 - **Tipo:** UI
-- **Descricao:** Implementar lista de ate cinco cidades com contexto geografico e selecao por mouse ou teclado.
+- **Descricao:** Implementar lista de ate dez cidades com contexto geografico e selecao explicita por mouse ou teclado.
 - **Rastreabilidade:** RF01; AC01, AC06; RNF02.
 - **Criterios de aceite:**
   - a lista renderiza nome, pais ou regiao quando disponiveis;
+  - a lista nunca exibe mais de 10 opcoes e preserva a ordem recebida do service;
   - cidades com mesmo nome sao diferenciadas por contexto geografico;
   - cada item e acionavel por teclado e mouse;
+  - nenhum item e selecionado automaticamente, inclusive quando existe uma unica opcao;
   - estados de vazio e erro mantem o formulario acessivel e informam a situacao sem depender apenas de cor.
 - **Dependencias:** T-12
 - **Arquivos provaveis:** `src/components/CityResults.tsx`
@@ -367,7 +372,7 @@ demonstrada antes de iniciar a seguinte.
 - **Rastreabilidade:** RF01, RF03; AC01, AC03.
 - **Criterios de aceite:**
   - testes validam labels de datas validas e invalidas sem depender do timezone do navegador;
-  - a geocodificacao limita para no maximo 5 resultados;
+  - a geocodificacao limita para no maximo 10 resultados e preserva a ordem do provedor;
   - duplicatas sao removidas por `id` ou coordenadas equivalentes;
   - lista vazia e tratada como resultado vazio e nao como erro de servico.
 - **Dependencias:** T-04, T-05
@@ -402,7 +407,7 @@ demonstrada antes de iniciar a seguinte.
 - **Descricao:** Verificar URL, normalizacao e erros do service de geocodificacao com `fetch` mockado.
 - **Rastreabilidade:** RF01; AC01, AC06.
 - **Criterios de aceite:**
-  - a URL inclui `count=5`, `language=pt` e `format=json`;
+  - a URL inclui `count=10`, `language=pt` e `format=json`;
   - termos vazios e invalidos nao disparam requisicao;
   - lista vazia e tratada como vazio e payload invalido e transformado em `AppError`;
   - a funcao delega para o normalizador e nao toca a rede real.
@@ -440,6 +445,8 @@ demonstrada antes de iniciar a seguinte.
 - **Criterios de aceite:**
   - `idle -> loading -> success/empty/error` e validado para busca e clima;
   - submit cancela debounce e evita duplicacao para o mesmo termo;
+  - resultados multiplos e unicos permanecem aguardando `selectCity` e nao disparam forecast automaticamente;
+  - `selectCity` dispara uma unica consulta usando o identificador e coordenadas da opcao escolhida;
   - `setUnit` nao chama service de rede;
   - retry reexecuta a operacao atual com sucesso ou erro.
 - **Dependencias:** T-12, T-13, T-14
@@ -465,6 +472,7 @@ demonstrada antes de iniciar a seguinte.
   - label, validacao local e submit sao validados;
   - os estados de `loading`, `empty` e `error` mantem a interface acessivel e informativa sem depender apenas de cor;
   - selecao por mouse e teclado e validada;
+  - listas com 2 a 10 resultados exibem contexto geografico, nao selecionam automaticamente uma opcao e limitam o total a 10;
   - contexto geografico e exibido corretamente e as mensagens de indisponibilidade nao vazam detalhes tecnicos.
 - **Dependencias:** T-15, T-16
 - **Arquivos provaveis:** `tests/unit/components/SearchForm.test.tsx`, `tests/unit/components/CityResults.test.tsx`
@@ -499,6 +507,9 @@ demonstrada antes de iniciar a seguinte.
 - **Rastreabilidade:** RF01–RF06; AC01–AC06; RNF01, RNF02, RNF03, RNF04, RNF05.
 - **Criterios de aceite:**
   - cobre busca, selecao, vazio, erro e retry no fluxo principal;
+  - cobre desambiguacao com multiplos resultados, limite de 10 opcoes e ausencia de forecast antes da selecao;
+  - cobre resultado unico que tambem exige selecao explicita;
+  - confirma que uma opcao selecionada usa seu identificador e coordenadas para consultar o clima;
   - valida clima atual e previsao de cinco dias;
   - confirma troca de unidade sem nova requisicao e refresh com snapshot preservado;
   - executa em viewport 320px sem rolagem horizontal e verifica comportamento desktop sem regressao.

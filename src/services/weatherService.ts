@@ -127,7 +127,7 @@ export async function searchCities(name: string): Promise<City[]> {
     return [];
   }
 
-  const url = `${GEOCODING_URL}?name=${encodeURIComponent(normalized)}&count=5&language=pt&format=json`;
+  const url = `${GEOCODING_URL}?name=${encodeURIComponent(normalized)}&count=10&language=pt&format=json`;
 
   const response = await fetchWithTimeout(url);
 
@@ -145,7 +145,18 @@ export async function searchCities(name: string): Promise<City[]> {
     throw new WeatherServiceError(INVALID_RESPONSE_MESSAGE, 'invalid-payload');
   }
 
-  return (data.results ?? []).filter(isValidGeocodingResult).map(mapResultToCity);
+  const cities = (data.results ?? []).filter(isValidGeocodingResult).map(mapResultToCity);
+  const uniqueCities = cities.filter(
+    (city, index, allCities) =>
+      allCities.findIndex(
+        (candidate) =>
+          candidate.id === city.id ||
+          (candidate.latitude.toFixed(6) === city.latitude.toFixed(6) &&
+            candidate.longitude.toFixed(6) === city.longitude.toFixed(6)),
+      ) === index,
+  );
+
+  return uniqueCities.slice(0, 10);
 }
 
 function toNullableNumber(value: number | null | undefined): number | null {

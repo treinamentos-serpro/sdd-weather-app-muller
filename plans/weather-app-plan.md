@@ -73,7 +73,7 @@ Estrutura planejada, preservando as convencoes do repositorio:
 src/
   components/
     SearchForm.tsx              # entrada e envio; sem regra de rede
-    CityResults.tsx             # resultados e selecao de cidade
+    CityResults.tsx             # lista de desambiguacao e selecao de cidade
     CurrentWeather.tsx          # clima atual e campos opcionais
     Forecast.tsx                # cinco blocos diarios
     UnitToggle.tsx              # Celsius/Fahrenheit acessivel
@@ -240,10 +240,10 @@ flowchart TD
   E --> F{Resposta valida?}
   F -- "nao: rede, timeout ou payload invalido" --> G[Hook: busca error + retry]
   F -- "sim, lista vazia" --> H[Hook: busca empty]
-  F -- "sim, ate 5 cidades" --> I[UI: lista de cidades]
+  F -- "sim, ate 10 cidades" --> I[UI: lista de desambiguacao]
   G --> J[UI: mensagem de erro e controles acessiveis]
   H --> K[UI: nenhuma cidade encontrada]
-  I --> L[Selecao de cidade]
+  I --> L[Selecao explicita de cidade]
   L --> M[Hook: cidade ativa + forecast loading]
   M --> N[forecastService]
   N --> O{Payload valido?}
@@ -274,24 +274,30 @@ flowchart TD
   duplicada na mesma sessao.
 3. `geocodingService` consulta o provedor, valida cada resultado minimo,
   remove duplicatas por identificador e, como fallback, por coordenadas
-  normalizadas, e retorna no maximo cinco `City`.
-4. A selecao de um `City` atualiza imediatamente a cidade ativa e inicia a
+  normalizadas, e retorna no maximo dez `City`, preservando a ordem relevante
+  do provedor.
+4. A UI apresenta os resultados como uma lista de desambiguacao. Nenhuma
+  cidade e escolhida automaticamente: mesmo quando ha apenas um resultado, o
+  clima so e consultado depois de `selectCity`. Cada opcao exibe nome e
+  contexto geografico disponivel, tem foco visivel e pode ser ativada por
+  teclado.
+5. A selecao de um `City` atualiza imediatamente a cidade ativa e inicia a
    consulta meteorologica. Resultados antigos nao podem sobrescrever a
    selecao mais recente.
-5. `weatherService` consulta cinco dias em Celsius, valida o payload e produz
+6. `weatherService` consulta cinco dias em Celsius, valida o payload e produz
   `WeatherData`. Campos opcionais incompletos tornam-se `null`; um dia diario
    incompleto ocupa sua posicao com valores indisponiveis. Um payload sem
    estrutura essencial, sem os campos essenciais do clima atual ou sem uma
    lista diaria utilizavel e rejeitado como invalido.
-6. O hook atualiza o status do fluxo com `loading`, `success`, `empty` ou
+7. O hook atualiza o status do fluxo com `loading`, `success`, `empty` ou
   `error`; o snapshot de clima e mantido separadamente. Durante refresh, o
   ultimo snapshot valido permanece disponivel mesmo enquanto o status muda.
-7. A UI recebe o snapshot canonico em Celsius, a unidade ativa e funcoes de
+8. A UI recebe o snapshot canonico em Celsius, a unidade ativa e funcoes de
   apresentacao. A cada renderizacao, a camada de apresentacao calcula o valor
   exibido sem alterar o snapshot: `Celsius = round(valorCelsius)` e
   `Fahrenheit = round(valorCelsius * 9 / 5 + 32)`. A troca de unidade apenas
   atualiza `unit`, nao chama a API e nao converte um valor ja arredondado.
-8. Atualizar repete a consulta usando a cidade ativa, preserva a cidade e pode
+9. Atualizar repete a consulta usando a cidade ativa, preserva a cidade e pode
    ser ignorado enquanto uma atualizacao equivalente estiver em andamento.
 
 Busca e clima devem ter caches em memoria separados. A chave de clima combina
@@ -313,7 +319,7 @@ atualizacao manual e a forma explicita de obter dados novos.
 Parametros relevantes:
 
 - `name`: termo normalizado;
-- `count=5`;
+- `count=10`;
 - `language=pt`;
 - `format=json`.
 
@@ -349,7 +355,7 @@ Mapeamento para `City`:
 - `results[].latitude` e `results[].longitude` -> coordenadas de `City`.
 
 Somente resultados com nome, identificador, latitude e longitude numericos
-podem ser mapeados. A lista deve ser limitada a cinco cidades e deduplicada
+podem ser mapeados. A lista deve ser limitada a dez cidades e deduplicada
 por `id` e, como fallback, por coordenadas normalizadas antes de chegar a UI.
 Resposta sem `results` ou com lista vazia e um
 resultado de dominio `empty`, nao um erro de transporte.
@@ -453,8 +459,9 @@ interface WeatherAppState {
 
 O estado inicial usa Celsius, busca em `idle`, clima em `idle`, sem cidade e
 sem snapshot. `searchResults` so e consumido quando a busca esta em
-`success`; quando esta em `empty`, a UI exibe a mensagem de ausencia de
-resultados. `unit` permanece no hook durante toda a sessao e nao vai para
+`success`; nesse estado, a UI renderiza a lista de desambiguacao e aguarda
+`selectCity`, sem iniciar automaticamente uma consulta meteorologica. Quando
+esta em `empty`, a UI exibe a mensagem de ausencia de resultados. `unit` permanece no hook durante toda a sessao e nao vai para
 localStorage. Acoes publicas do hook devem cobrir `submitSearch`,
 `selectCity`, `setUnit`, `refresh` e `retry`, permitindo que componentes
 permaneçam apresentacionais. `setUnit` nunca altera `weather.snapshot`: os
@@ -472,6 +479,11 @@ individuais.
   que sao necessarios pelo menos dois caracteres.
 - **Busca sem resultados**: exibe `Nenhuma cidade encontrada para “X”.` e
   preserva o formulario.
+- **Resultados ambiguos ou multiplos**: exibe ate dez opcoes em uma lista
+  acessivel, identificadas por nome e contexto geografico, e nao consulta o
+  clima ate que o usuario selecione uma cidade.
+- **Resultado unico**: exibe a opcao como resultado selecionavel e tambem
+  aguarda a selecao explicita antes de consultar o clima.
 - **Falha de geocodificacao**: exibe `Não foi possível localizar cidades.
   Tente novamente.` com retry explicito.
 - **Clima inicial com falha**: mantém a cidade selecionada e exibe erro com
@@ -509,7 +521,7 @@ termo completo, coordenadas precisas ou qualquer dado pessoal (RNF02 e RNF09).
 
 | Requisito | Decisao no plano | Verificacao |
 | --- | --- | --- |
-| RF01 / AC01 | debounce de 300 ms, submit sem duplicacao, cache por termo e ate cinco cidades | testes de hook, service e E2E de busca/erro/vazio |
+| RF01 / AC01 | debounce de 300 ms, submit sem duplicacao, cache por termo, ate dez cidades e selecao explicita para desambiguacao | testes de lib, service, hook, componentes e E2E de busca/erro/vazio/desambiguacao |
 | RF02-RF03 / AC02-AC03 | modelos normalizados, WMO, cinco posicoes diarias e campos `null` | testes de `lib/weather.ts`, componentes e E2E de sucesso/incompleto |
 | RF04 / AC04 | Celsius canonico e conversao somente na apresentacao | testes de temperatura, hook e E2E sem nova requisicao |
 | RF05-RF06 / AC05-AC06 | snapshot separado do status, retry, loading, erro, vazio e indisponibilidade | testes de hook/componentes e E2E de refresh/retry |
@@ -540,7 +552,7 @@ Sem rede, sem DOM e sem mocks; apenas entrada e saida.
   incluindo codigos desconhecidos;
 - `date.ts`: formatacao de datas locais a partir de strings ISO;
 - `geocoding.ts`: validacao de campos essenciais, deduplicacao por `id` ou
-  coordenadas normalizadas e limite de cinco cidades;
+  coordenadas normalizadas e limite de dez cidades;
 - `weather.ts`: validacao de payload completo, vazio, nulo e parcialmente
   incompleto; alinhamento dos arrays diarios por indice; degradacao de um
   dia individual para `null` sem rejeitar os demais.
@@ -564,6 +576,10 @@ Sem rede, sem DOM e sem mocks; apenas entrada e saida.
   busca e para clima;
 - preservacao do `weather.snapshot` durante refresh com falha;
 - debounce, cache em memoria e supressao de busca redundante;
+- resultados de busca permanecem disponiveis ate uma selecao explicita;
+- busca com multiplos resultados nao dispara forecast automaticamente;
+- lista limitada a dez opcoes, com nome, contexto geografico, foco visivel e
+  ativacao por teclado;
 - `setUnit` altera apenas `unit`, nunca `weather.snapshot`, e nao dispara
   requisicao;
 - concorrencia: resposta fora de ordem nao sobrescreve a cidade/termo atuais.
@@ -582,6 +598,9 @@ diretamente controladas (sem depender do hook real):
   preservado;
 - **sucesso**: renderizacao dos campos de `CurrentWeather`, dos cinco blocos
   de `ForecastDay` e do valor exibido convertido para a unidade ativa;
+- **desambiguacao**: renderizacao de uma lista com 2 a 10 cidades, contexto
+  geografico por opcao, foco e ativacao por teclado; a selecao dispara apenas
+  uma consulta para a cidade escolhida;
 - **dados incompletos**: campos `null` exibidos como indisponiveis, sem
   `NaN`/`undefined` na tela;
 - acessibilidade: labels, roles, ordem de foco e navegacao por teclado no
@@ -593,6 +612,13 @@ Com respostas da Open-Meteo interceptadas (sem chamada real de rede), cobrir
 os fluxos dos AC01-AC06 de ponta a ponta pela UI renderizada:
 
 - buscar termo valido, selecionar cidade e carregar clima atual e previsao;
+- buscar termo com multiplas correspondencias, verificar no maximo dez opcoes,
+  confirmar que nenhuma consulta meteorologica ocorre antes da escolha e
+  carregar o clima da cidade selecionada;
+- buscar termo com mais de dez correspondencias e verificar que somente as
+  dez primeiras na ordem do provedor sao exibidas;
+- buscar termo com uma unica correspondencia e confirmar a selecao explicita
+  antes de carregar o clima;
 - termo sem resultados e falha de geocodificacao, cada uma com sua mensagem;
 - alternar unidade sem nova requisicao de rede e manter a unidade ao trocar
   de cidade;
@@ -615,9 +641,12 @@ interna). O checklist de entrega permanece `pnpm lint`, `pnpm build` e
   considerada*: backend proprio como proxy/cache; descartada por adicionar
   infraestrutura, custo e complexidade de deploy sem requisito da spec.
 - **Ambiguidade de cidades**: nomes iguais podem confundir. Mitigacao:
-  mostrar pais/regiao e manter o identificador geografico no contrato.
-  *Alternativa considerada*: desambiguar apenas por coordenadas na UI;
-  descartada por ser ilegivel para o usuario final.
+  retornar ate dez resultados, mostrar pais/regiao, manter o identificador
+  geografico no contrato e exigir selecao explicita antes do forecast.
+  *Alternativa considerada*: escolher automaticamente o primeiro resultado;
+  descartada porque pode consultar a localidade errada. *Outra alternativa*:
+  exibir todos os resultados do provedor; descartada para preservar legibilidade
+  e limitar o custo visual da lista.
 - **Dados diarios incompletos**: arrays do provedor podem ter valores nulos ou
   desalinhados. Mitigacao: validar por indice, degradar cada dia
   individualmente e rejeitar apenas payloads sem estrutura essencial.

@@ -5,7 +5,8 @@
 A aplicação permite consultar o clima atual e a previsão de cinco dias de uma cidade selecionada por meio de uma interface simples, responsiva e acessível. A versão inicial foi definida para uso principal em dispositivos móveis, com suporte funcional em desktop, priorizando velocidade, legibilidade e recuperação segura de falhas em conexões instáveis.
 
 Objetivo do produto:
-- permitir busca por cidade em até 5 resultados relevantes;
+- permitir busca por cidade em até 10 resultados relevantes;
+- permitir desambiguar cidades com o mesmo nome antes de consultar o clima;
 - exibir clima atual e previsão de cinco dias para uma cidade selecionada;
 - alternar entre Celsius e Fahrenheit sem requerer nova busca;
 - manter a interface utilizável mesmo com falhas de rede, respostas incompletas ou ausência de dados.
@@ -26,11 +27,14 @@ O usuário deve informar um texto de busca e receber cidades compatíveis com es
 Regras de negócio:
 - o termo deve conter no mínimo 2 caracteres após trim;
 - busca com texto vazio, somente espaços ou menor que 2 caracteres não deve disparar requisição;
-- a aplicação deve exibir no máximo 5 resultados por busca;
+- a aplicação deve exibir no máximo 10 resultados por busca;
 - cada resultado deve apresentar, no mínimo, nome da cidade e contexto geográfico relevante, como país, estado ou região, quando disponível;
 - resultados duplicados para o mesmo termo devem ser evitados no mesmo ciclo de busca;
 - cidades com nomes repetidos devem ser diferenciadas por contexto geográfico;
-- a seleção de uma cidade deve iniciar imediatamente a consulta do clima dessa cidade.
+- quando houver mais de um resultado, a aplicação deve apresentar uma lista de desambiguação para que o usuário selecione explicitamente uma cidade;
+- enquanto houver mais de um resultado e nenhuma cidade tiver sido selecionada, a aplicação não deve iniciar a consulta do clima;
+- a seleção de uma cidade deve iniciar imediatamente a consulta do clima dessa cidade;
+- a lista de desambiguação deve ser navegável por teclado e cada opção deve ser identificável por nome e contexto geográfico.
 
 Dados mínimos esperados da busca:
 - nome da cidade;
@@ -39,7 +43,10 @@ Dados mínimos esperados da busca:
 - latitude e longitude, quando disponíveis.
 
 Critérios de aceite:
-- Given que o usuário informa um termo válido, When envia a busca, Then a aplicação lista cidades compatíveis em até 5 segundos em rede 4G estável.
+- Given que o usuário informa um termo válido, When envia a busca, Then a aplicação lista até 10 cidades compatíveis em até 5 segundos em rede 4G estável.
+- Given que a busca retorna mais de uma cidade, When os resultados são exibidos, Then a aplicação apresenta uma lista de desambiguação com no máximo 10 opções, cada uma com nome e contexto geográfico disponível, e aguarda a seleção do usuário antes de consultar o clima.
+- Given que a busca retorna exatamente uma cidade, When o resultado é processado, Then a aplicação permite selecioná-la e inicia a consulta do clima somente após a seleção.
+- Given que o usuário seleciona uma opção da lista de desambiguação, When a seleção é confirmada, Then a aplicação identifica a cidade selecionada e inicia a consulta do clima correspondente.
 - Given que o termo não corresponde a nenhuma cidade, When a busca termina, Then a interface exibe a mensagem “Nenhuma cidade encontrada para “X”.”
 - Given que a geocodificação falha, When a busca é concluída, Then a aplicação exibe a mensagem “Não foi possível localizar cidades. Tente novamente.” e mantém os controles acessíveis.
 - Given que o usuário repete a mesma busca consecutivamente, When a segunda requisição é disparada, Then a aplicação não envia uma segunda requisição redundante para o mesmo termo.
@@ -135,6 +142,8 @@ A camada de serviço deve validar e mapear as respostas do provedor antes da ren
 Geocoding requirements:
 - o provedor pode retornar uma lista de cidades equivalentes;
 - cada item deve conter nome da cidade e contexto geográfico suficiente para distinguir duplicatas;
+- a camada de serviço deve retornar no máximo 10 cidades válidas e distintas para a interface;
+- a interface deve preservar a lista de resultados para permitir a desambiguação quando houver mais de uma cidade;
 - se a lista retornar vazia, a aplicação deve tratar como “nenhuma cidade encontrada”;
 - se a resposta falhar ou o timeout ocorrer, a aplicação deve tratar como erro de serviço.
 
@@ -147,6 +156,7 @@ Weather requirements:
 ## User Stories
 
 - Como Marina, quero buscar uma cidade por nome para encontrar rapidamente o clima do destino da viagem. (RF01)
+- Como Marina, quero escolher a cidade correta quando houver mais de uma correspondência para o nome informado, para consultar o clima do destino certo. (RF01)
 - Como Marina, quero visualizar o clima atual com temperatura, condição e dados adicionais para decidir o que levar na mala. (RF02)
 - Como Marina, quero consultar a previsão de cinco dias para planejar atividades e rotas durante a viagem. (RF03)
 - Como Diego, quero verificar rapidamente a temperatura e a condição climática da minha cidade para me organizar sem distrações. (RF02)
@@ -157,7 +167,9 @@ Weather requirements:
 ## Acceptance Criteria
 
 ### AC01 — Busca e seleção
-- Given que o usuário informa um termo válido, When envia a busca, Then recebe até 5 resultados relevantes.
+- Given que o usuário informa um termo válido, When envia a busca, Then recebe até 10 resultados relevantes.
+- Given que existem múltiplas cidades compatíveis, When os resultados são exibidos, Then recebe uma lista de desambiguação com no máximo 10 opções identificadas por nome e contexto geográfico, sem consulta meteorológica automática.
+- Given que o usuário seleciona uma cidade da lista, When a seleção é realizada, Then a consulta meteorológica usa o identificador e as coordenadas da cidade selecionada.
 - Given que o termo não corresponde a nenhuma cidade, When a busca termina, Then a aplicação exibe a mensagem “Nenhuma cidade encontrada para “X”.”
 - Given que o serviço de geocodificação falha, When a busca termina, Then a aplicação exibe mensagem de erro e mantém a busca acessível.
 
@@ -233,6 +245,8 @@ seu comportamento e aos requisitos não funcionais que condicionam sua entrega.
 - busca com texto vazio, somente espaços ou menor que 2 caracteres;
 - cidade inexistente ou muito genérica;
 - cidades com nome duplicado em diferentes países ou regiões;
+- busca que retorna entre 2 e 10 cidades e exige escolha explícita;
+- busca que retorna mais de 10 cidades e deve exibir somente as 10 primeiras segundo a ordenação do provedor;
 - falha temporária de rede;
 - provedor lento ou indisponível;
 - resposta incompleta, inválida ou nula;
@@ -249,6 +263,8 @@ seu comportamento e aos requisitos não funcionais que condicionam sua entrega.
 - Open-Meteo será o provedor oficial de geocodificação e previsão;
 - não haverá autenticação na primeira versão;
 - o usuário seleciona manualmente a cidade por meio da busca;
+- quando houver múltiplas correspondências, o usuário deverá selecionar explicitamente uma opção de uma lista limitada a 10 resultados;
+- a ordenação dos resultados de desambiguação será a ordem relevante retornada pelo provedor;
 - a previsão será exibida em formato diário, com cinco dias, começando no dia atual;
 - Celsius será a unidade padrão inicial;
 - Fahrenheit será uma alternativa de visualização, sem alterar a fonte de dados;
@@ -268,7 +284,8 @@ seu comportamento e aos requisitos não funcionais que condicionam sua entrega.
 
 Mitigações:
 - exibir mensagens de erro claras e manter a última previsão válida disponível;
-- mostrar contexto geográfico para distinguir cidades;
+- mostrar contexto geográfico e exigir seleção explícita para distinguir cidades;
+- limitar a lista de desambiguação a 10 resultados para preservar legibilidade e tempo de escolha;
 - validar campos e tratar dados incompletos explicitamente;
 - aplicar debounce e cache em memória durante a sessão;
 - priorizar legibilidade e contraste em layouts pequenos.

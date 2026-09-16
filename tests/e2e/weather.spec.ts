@@ -47,6 +47,7 @@ test('searches for a city, shows its forecast, and converts the temperature', as
   await page.goto('/');
   await page.getByLabel('Cidade').fill('Sao Paulo');
   await page.getByRole('button', { name: 'Buscar' }).click();
+  await page.getByRole('button', { name: /Sao Paulo.*Sao Paulo.*Brasil/ }).click();
 
   await expect(page.getByRole('heading', { name: 'Sao Paulo' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Previsão para 5 dias' })).toBeVisible();
@@ -121,6 +122,7 @@ test('renders safe fallbacks when the forecast is incomplete', async ({ page }) 
   await page.goto('/');
   await page.getByLabel('Cidade').fill('Sao Paulo');
   await page.getByRole('button', { name: 'Buscar' }).click();
+  await page.getByRole('button', { name: /Sao Paulo.*Brasil/ }).click();
 
   await expect(page.getByRole('heading', { name: 'Sao Paulo' })).toBeVisible();
   await expect(page.getByRole('article')).toHaveCount(5);
@@ -178,7 +180,58 @@ test('renders the weather flow correctly on a 375x812 viewport', async ({ page }
   await page.goto('/');
   await page.getByLabel('Cidade').fill('Sao Paulo');
   await page.getByRole('button', { name: 'Buscar' }).click();
+  await page.getByRole('button', { name: /Sao Paulo.*Sao Paulo.*Brasil/ }).click();
 
   await expect(page.getByRole('heading', { name: 'Sao Paulo' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Previsão para 5 dias' })).toBeVisible();
+});
+
+test('disambiguates cities before requesting the forecast', async ({ page }) => {
+  let forecastRequests = 0;
+
+  await page.route('**/geocoding-api.open-meteo.com/**', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        results: [
+          {
+            id: 1,
+            name: 'Sao Paulo',
+            country: 'Brasil',
+            admin1: 'Sao Paulo',
+            latitude: -23.55,
+            longitude: -46.63,
+          },
+          {
+            id: 2,
+            name: 'Sao Paulo',
+            country: 'Portugal',
+            admin1: 'Braga',
+            latitude: 41.23,
+            longitude: -8.62,
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route('**/api.open-meteo.com/**', async (route) => {
+    forecastRequests += 1;
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ current: {}, daily: { time: ['2026-09-16'] } }),
+    });
+  });
+
+  await page.goto('/');
+  await page.getByLabel('Cidade').fill('Sao Paulo');
+  await page.getByRole('button', { name: 'Buscar' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Selecione uma cidade' })).toBeVisible();
+  expect(forecastRequests).toBe(0);
+
+  await page.getByRole('button', { name: /Sao Paulo.*Braga.*Portugal/ }).click();
+
+  await expect(page.getByRole('heading', { name: 'Sao Paulo' })).toBeVisible();
+  expect(forecastRequests).toBe(1);
 });

@@ -60,6 +60,25 @@ describe('weatherService', () => {
       expect(result[0]).toMatchObject({ ...city, region: 'Washington' });
     });
 
+    it('requests and returns at most ten unique cities in provider order', async () => {
+      const results = Array.from({ length: 11 }, (_, index) => ({
+        id: index + 1,
+        name: `City ${index + 1}`,
+        country: 'Brasil',
+        latitude: index,
+        longitude: index,
+      }));
+      results[1] = { ...results[0], id: 99 };
+      const fetchSpy = mockFetch({ results });
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const result = await searchCities('City');
+
+      expect(new URL(fetchSpy.mock.calls[0][0] as string).searchParams.get('count')).toBe('10');
+      expect(result).toHaveLength(10);
+      expect(result.map((item) => item.id)).toEqual([1, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    });
+
     it('returns an empty list when results are absent', async () => {
       vi.stubGlobal('fetch', mockFetch({}));
 

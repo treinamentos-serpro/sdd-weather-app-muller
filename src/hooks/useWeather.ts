@@ -47,31 +47,29 @@ export function useWeather(): UseWeatherResult {
     }
   }, []);
 
-  const search = useCallback(
-    async (name: string) => {
-      lastOperationRef.current = { type: 'search', name };
-      setQuery(name);
-      setStatus('loading');
-      setError(null);
-      setCities([]);
+  const search = useCallback(async (name: string) => {
+    lastOperationRef.current = { type: 'search', name };
+    setQuery(name);
+    setStatus('loading');
+    setData(null);
+    setError(null);
+    setCities([]);
 
-      try {
-        const results = await searchCities(name);
-        setCities(results);
+    try {
+      const results = await searchCities(name);
+      setCities(results);
 
-        if (results.length === 0) {
-          setStatus('empty');
-          return;
-        }
-
-        await loadCityWeather(results[0]);
-      } catch (err) {
-        setError(getErrorMessage(err));
-        setStatus('error');
+      if (results.length === 0) {
+        setStatus('empty');
+        return;
       }
-    },
-    [loadCityWeather],
-  );
+
+      setStatus('success');
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setStatus('error');
+    }
+  }, []);
 
   const selectCity = useCallback(
     async (city: City) => {

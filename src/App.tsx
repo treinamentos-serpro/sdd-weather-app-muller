@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-
+import CityResults from './components/CityResults';
 import CurrentWeather from './components/CurrentWeather';
 import ForecastList from './components/ForecastList';
 import SearchBar from './components/SearchBar';
@@ -10,7 +10,7 @@ import type { Unit } from './types/weather';
 
 export default function App() {
   const [unit, setUnit] = useState<Unit>('celsius');
-  const { status, data, error, query, search, retry } = useWeather();
+  const { cities, status, data, error, query, search, selectCity, retry } = useWeather();
   const mainRef = useRef<HTMLElement>(null);
   const previousStatusRef = useRef(status);
 
@@ -57,12 +57,14 @@ export default function App() {
               <CurrentWeather city={data.city} current={data.current} unit={unit} />
               <ForecastList forecast={data.forecast} unit={unit} />
             </div>
+          ) : status === 'success' ? (
+            <CityResults cities={cities} onSelect={selectCity} />
           ) : (
             <WeatherState
               onRetry={retry}
               message={error ?? undefined}
               query={query}
-              status={status === 'success' ? 'loading' : status}
+              status={status}
             />
           )}
         </main>
