@@ -45,7 +45,7 @@ test('searches for a city, shows its forecast, and converts the temperature', as
   });
 
   await page.goto('/');
-  await page.getByLabel('Cidade').fill('Sao Paulo');
+  await page.getByRole('searchbox', { name: 'Cidade' }).fill('Sao Paulo');
   await page.getByRole('button', { name: 'Buscar' }).click();
 
   await expect(page.getByRole('heading', { name: 'Sao Paulo' })).toBeVisible();
@@ -65,7 +65,7 @@ test('shows an empty state when geocoding returns no results', async ({ page }) 
   });
 
   await page.goto('/');
-  await page.getByLabel('Cidade').fill('Atlantis');
+  await page.getByRole('searchbox', { name: 'Cidade' }).fill('Atlantis');
   await page.getByRole('button', { name: 'Buscar' }).click();
 
   await expect(page.getByRole('status')).toContainText('Nenhuma cidade encontrada');
@@ -83,7 +83,7 @@ test('encodes special characters in a city search', async ({ page }) => {
   });
 
   await page.goto('/');
-  await page.getByLabel('Cidade').fill('São Paulo & Co.');
+  await page.getByRole('searchbox', { name: 'Cidade' }).fill('São Paulo & Co.');
   await page.getByRole('button', { name: 'Buscar' }).click();
 
   await expect(page.getByRole('status')).toContainText('Nenhuma cidade encontrada');
@@ -119,7 +119,7 @@ test('renders safe fallbacks when the forecast is incomplete', async ({ page }) 
   });
 
   await page.goto('/');
-  await page.getByLabel('Cidade').fill('Sao Paulo');
+  await page.getByRole('searchbox', { name: 'Cidade' }).fill('Sao Paulo');
   await page.getByRole('button', { name: 'Buscar' }).click();
 
   await expect(page.getByRole('heading', { name: 'Sao Paulo' })).toBeVisible();
@@ -176,7 +176,7 @@ test('renders the weather flow correctly on a 375x812 viewport', async ({ page }
   });
 
   await page.goto('/');
-  await page.getByLabel('Cidade').fill('Sao Paulo');
+  await page.getByRole('searchbox', { name: 'Cidade' }).fill('Sao Paulo');
   await page.getByRole('button', { name: 'Buscar' }).click();
 
   await expect(page.getByRole('heading', { name: 'Sao Paulo' })).toBeVisible();
