@@ -1,8 +1,11 @@
-import { useCallback, useState } from 'react';
-import type { City, WeatherData } from '../types/weather';
+import { useCallback, useRef, useState } from 'react';
+
 import { getWeather, searchCities, WeatherServiceError } from '../services/weatherService';
+import type { City, WeatherData } from '../types/weather';
 
 export type WeatherStatus = 'idle' | 'loading' | 'success' | 'error' | 'empty';
+
+type LastOperation = { type: 'search'; name: string } | { type: 'selectCity'; city: City };
 
 interface UseWeatherResult {
   status: WeatherStatus;
@@ -15,76 +18,84 @@ interface UseWeatherResult {
   retry: () => Promise<void>;
 }
 
-/**
- * Hook de orquestração: busca cidades, seleciona uma e carrega o clima.
- * Expõe uma máquina de estados simples (idle/loading/success/error/empty).
- */
+const DEFAULT_ERROR_MESSAGE = 'Não foi possível concluir a operação. Tente novamente.';
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof WeatherServiceError ? error.message : DEFAULT_ERROR_MESSAGE;
+}
+
+/** Orquestra busca de cidades e clima, expondo uma máquina de estados única. */
 export function useWeather(): UseWeatherResult {
   const [status, setStatus] = useState<WeatherStatus>('idle');
   const [data, setData] = useState<WeatherData | null>(null);
   const [cities, setCities] = useState<City[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [lastCity, setLastCity] = useState<City | null>(null);
+  const lastOperationRef = useRef<LastOperation | null>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: search inicia o fluxo na montagem; loadWeather é estável
-  const search = useCallback(async (name: string) => {
-    const trimmed = name.trim();
-    setQuery(trimmed);
-    if (!trimmed) return;
-
+  const loadCityWeather = useCallback(async (city: City) => {
     setStatus('loading');
     setError(null);
-    setCities([]);
-    try {
-      const results = await searchCities(trimmed);
-      if (results.length === 0) {
-        setStatus('empty');
-        return;
-      }
-      // Seleciona automaticamente a primeira correspondência, mas mantém a
-      // lista para o usuário trocar.
-      setCities(results);
-      await loadWeather(results[0]);
-    } catch (err) {
-      setStatus('error');
-      setError(toMessage(err));
-    }
-  }, []);
 
-  const loadWeather = useCallback(async (city: City) => {
-    setStatus('loading');
-    setError(null);
-    setLastCity(city);
     try {
       const weather = await getWeather(city);
       setData(weather);
       setStatus('success');
     } catch (err) {
+      setError(getErrorMessage(err));
       setStatus('error');
-      setError(toMessage(err));
     }
   }, []);
 
+  const search = useCallback(
+    async (name: string) => {
+      lastOperationRef.current = { type: 'search', name };
+      setQuery(name);
+      setStatus('loading');
+      setError(null);
+      setCities([]);
+
+      try {
+        const results = await searchCities(name);
+        setCities(results);
+
+        if (results.length === 0) {
+          setStatus('empty');
+          return;
+        }
+
+        await loadCityWeather(results[0]);
+      } catch (err) {
+        setError(getErrorMessage(err));
+        setStatus('error');
+      }
+    },
+    [loadCityWeather],
+  );
+
   const selectCity = useCallback(
     async (city: City) => {
-      await loadWeather(city);
+      lastOperationRef.current = { type: 'selectCity', city };
+      setQuery(city.name);
+      await loadCityWeather(city);
     },
-    [loadWeather],
+    [loadCityWeather],
   );
 
   const retry = useCallback(async () => {
-    if (lastCity) {
-      await loadWeather(lastCity);
-    } else if (query) {
-      await search(query);
+    const lastOperation = lastOperationRef.current;
+
+    if (!lastOperation) {
+      return;
     }
-  }, [lastCity, query, loadWeather, search]);
+
+    if (lastOperation.type === 'search') {
+      await search(lastOperation.name);
+      return;
+    }
+
+    await selectCity(lastOperation.city);
+  }, [search, selectCity]);
 
   return { status, data, cities, error, query, search, selectCity, retry };
-}
-
-function toMessage(err: unknown): string {
-  if (err instanceof WeatherServiceError) return err.message;
-  return 'Algo deu errado. Tente novamente.';
 }

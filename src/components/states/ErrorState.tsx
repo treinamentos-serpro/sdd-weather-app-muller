@@ -3,21 +3,21 @@ interface ErrorStateProps {
   onRetry: () => void;
 }
 
-/** Estado de erro com ação de "tentar novamente". */
 export default function ErrorState({ message, onRetry }: ErrorStateProps) {
   return (
-    <div role="alert" className="flex flex-col items-center gap-4 py-16 text-center">
-      <span aria-hidden="true" className="text-4xl">
-        ⚠️
-      </span>
-      <p className="text-white/80">{message}</p>
+    <section
+      aria-live="assertive"
+      className="flex min-h-32 flex-col items-center justify-center gap-4 rounded-xl border border-red-300/30 bg-red-950/20 p-6 text-center backdrop-blur-md"
+      role="alert"
+    >
+      <p className="text-white">{message}</p>
       <button
-        type="button"
+        className="min-h-11 rounded-lg bg-accent-500 px-4 text-sm font-semibold text-night-900 transition hover:bg-accent-400 focus:outline-none focus:ring-2 focus:ring-accent-400 focus:ring-offset-2 focus:ring-offset-night-900"
         onClick={onRetry}
-        className="rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent-600"
+        type="button"
       >
         Tentar novamente
       </button>
-    </div>
+    </section>
   );
 }

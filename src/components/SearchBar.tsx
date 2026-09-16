@@ -1,47 +1,60 @@
-import { useState, type FormEvent } from 'react';
+import { type FormEvent, useState } from 'react';
 
 interface SearchBarProps {
   onSearch: (city: string) => void;
   disabled?: boolean;
 }
 
-/** Barra de busca de cidade. Bloqueia submit com input vazio. */
-export default function SearchBar({ onSearch, disabled }: SearchBarProps) {
-  const [value, setValue] = useState('');
+export default function SearchBar({ onSearch, disabled = false }: SearchBarProps) {
+  const [city, setCity] = useState('');
+  const trimmedCity = city.trim();
+  const isSearchDisabled = disabled || trimmedCity.length < 2;
 
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    onSearch(trimmed);
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (isSearchDisabled) {
+      return;
+    }
+
+    onSearch(trimmedCity);
   }
 
   return (
-    <form role="search" onSubmit={handleSubmit} className="w-full max-w-md">
-      <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-md focus-within:border-accent-500">
-        <span aria-hidden="true" className="text-white/50">
-          🔍
-        </span>
-        <label htmlFor="city-search" className="sr-only">
-          Buscar cidade
+    <form
+      aria-label="Buscar cidade"
+      className="flex w-full flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/20 backdrop-blur-md sm:flex-row sm:items-end"
+      onSubmit={handleSubmit}
+      role="search"
+    >
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <label className="text-sm font-medium text-white/90" htmlFor="city-search">
+          Cidade
         </label>
         <input
+          autoComplete="address-level2"
+          aria-describedby="city-search-help"
+          className="min-h-12 rounded-xl border border-white/10 bg-night-900/70 px-4 text-base text-white outline-none transition placeholder:text-white/50 focus:border-accent-400 focus:ring-2 focus:ring-accent-400/40 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={disabled}
           id="city-search"
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="Buscar cidade…"
-          autoComplete="off"
-          className="flex-1 bg-transparent text-white placeholder-white/40 outline-none"
+          name="city"
+          onChange={(event) => setCity(event.target.value)}
+          placeholder="Ex.: Sao Paulo"
+          type="search"
+          value={city}
         />
-        <button
-          type="submit"
-          disabled={disabled || !value.trim()}
-          className="rounded-lg bg-accent-500 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Buscar
-        </button>
+        <p className="text-xs text-white/70" id="city-search-help">
+          Digite ao menos 2 caracteres para buscar.
+        </p>
       </div>
+
+      <button
+        className="min-h-12 w-full rounded-xl bg-accent-500 px-5 text-sm font-semibold text-night-900 transition hover:bg-accent-400 focus:outline-none focus:ring-2 focus:ring-accent-400 focus:ring-offset-2 focus:ring-offset-night-900 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40 disabled:hover:bg-white/10 disabled:hover:text-white/40 sm:w-auto"
+        disabled={isSearchDisabled}
+        type="submit"
+      >
+        Buscar
+      </button>
     </form>
   );
 }
